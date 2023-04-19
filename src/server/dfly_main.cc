@@ -309,7 +309,11 @@ bool RunEngine(ProactorPool* pool, AcceptServer* acceptor) {
 
   Service service(pool);
 
-  Listener* main_listener = new Listener{Protocol::REDIS, &service};
+  auto tcp_disabled = GetFlag(FLAGS_port) == 0u;
+  Listener* main_listener = nullptr;
+
+  if (!tcp_disabled)
+    main_listener = new Listener{Protocol::REDIS, &service};
 
   Service::InitOpts opts;
   opts.disable_time_update = false;
@@ -327,16 +331,26 @@ bool RunEngine(ProactorPool* pool, AcceptServer* acceptor) {
     Listener* uds_listener = new Listener{Protocol::REDIS, &service};
     error_code ec = acceptor->AddUDSListener(unix_sock.c_str(), uds_listener);
     if (ec) {
-      LOG(WARNING) << "Could not open unix socket " << unix_sock << ", error " << ec;
+      if (tcp_disabled) {
+        LOG(ERROR) << "Could not open unix socket " << unix_sock
+                   << ", and TCP listening is disabled (error: " << ec << "). Exiting.";
+        exit(1);
+      } else {
+        LOG(WARNING) << "Could not open unix socket " << unix_sock << ", error " << ec;
+      }
       delete uds_listener;
     } else {
       LOG(INFO) << "Listening on unix socket " << unix_sock;
       unlink_uds = true;
     }
+  } else if (tcp_disabled) {
+    LOG(ERROR)
+        << "Did not receive a unix socket to listen to, yet TCP listening is disabled. Exiting.";
+    exit(1);
   }
 
   std::uint16_t admin_port = GetFlag(FLAGS_admin_port);
-  if (admin_port != 0) {
+  if (admin_port != 0 && !tcp_disabled) {
     const std::string& admin_bind = GetFlag(FLAGS_admin_bind);
     // Note passing the result of c_str() for empty string in optimized mode don't work, we must
     // explicitly set this to null in this case
@@ -354,14 +368,16 @@ bool RunEngine(ProactorPool* pool, AcceptServer* acceptor) {
     }
   }
 
-  error_code ec = acceptor->AddListener(bind_addr, port, main_listener);
+  if (!tcp_disabled) {
+    error_code ec = acceptor->AddListener(bind_addr, port, main_listener);
 
-  if (ec) {
-    LOG(ERROR) << "Could not open port " << port << ", error: " << ec.message();
-    exit(1);
+    if (ec) {
+      LOG(ERROR) << "Could not open port " << port << ", error: " << ec.message();
+      exit(1);
+    }
   }
 
-  if (mc_port > 0) {
+  if (mc_port > 0 && !tcp_disabled) {
     acceptor->AddListener(mc_port, new Listener{Protocol::MEMCACHE, &service});
   }
 
@@ -479,7 +495,13 @@ Usage: dragonfly [FLAGS]
   sigemptyset(&act.sa_mask);
   sigaction(SIGILL, &act, nullptr);
 
-  CHECK_GT(GetFlag(FLAGS_port), 0u);
+  if (GetFlag(FLAGS_port) == 0u) {
+    auto usock = GetFlag(FLAGS_unixsocket);
+    CHECK_GT(usock.length(), 0u);
+    LOG(INFO) << "received --port 0, disabling TCP listening.";
+    LOG(INFO) << "listening on unix socket " << usock << ".";
+  }
+
   mi_stats_reset();
 
   if (GetFlag(FLAGS_dbnum) > dfly::kMaxDbId) {
