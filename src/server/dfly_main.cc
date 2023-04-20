@@ -350,7 +350,7 @@ bool RunEngine(ProactorPool* pool, AcceptServer* acceptor) {
   }
 
   std::uint16_t admin_port = GetFlag(FLAGS_admin_port);
-  if (admin_port != 0 && !tcp_disabled) {
+  if (admin_port != 0) {
     const std::string& admin_bind = GetFlag(FLAGS_admin_bind);
     // Note passing the result of c_str() for empty string in optimized mode don't work, we must
     // explicitly set this to null in this case
