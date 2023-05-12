@@ -26,25 +26,24 @@ def ping(r):
     r.ping()
 
 def jsonset(r, i):
-    key = "json-{}".format(i)
+    key = f"json-{i}"
     r.execute_command('JSON.SET', key, '.', '{"a":123456, "b": "hello", "nested": {"abc": "ffffff", "bfb": null}}')
 
 
 def jsonget(r, i):
-    key = "json-{}".format(i)
+    key = f"json-{i}"
     r.execute_command('JSON.GET', key, '$.a', '$..abc')
 
 def jsontype(r, i):
-    key = "json-{}".format(i)
+    key = f"json-{i}"
     r.execute_command('JSON.TYPE', key, '$.a')
 
 def runWorker(ctx):
     wpid = os.getpid()
-    print( '{} '.format(wpid))
+    print(f'{wpid} ')
 
     rep = defaultdict(int)
     r = redis.StrictRedis(host=ctx['host'], port=ctx['port'])
-    work = ctx['work']
     if ctx['pipeline'] == 0:
         total_count = int(ctx['count'])
         for i in range(0, total_count):
@@ -66,10 +65,11 @@ def runWorker(ctx):
             bin = int(math.floor(s1 * 1000)) + 1
             rep[bin] += 1
     else:
-        for i in range(0, ctx['count'], ctx['pipeline']):
+        work = ctx['work']
+        for _ in range(0, ctx['count'], ctx['pipeline']):
             p = r.pipeline()
             s0 = time.time()
-            for j in range(0, ctx['pipeline']):
+            for _ in range(0, ctx['pipeline']):
                 work(p)
             p.execute()
             s1 = time.time() - s0

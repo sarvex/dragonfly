@@ -36,7 +36,7 @@ def main():
     # print ('{', end=' ')
     for i in range(args.num):
         incr = size // 4
-        for j in range(4):
+        for _ in range(4):
             assert size % 512 == 0, size
             print (f'{size}, ', end=' ')
             size += incr

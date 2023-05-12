@@ -53,7 +53,7 @@ class TestEmulatedWithAnnounceIp:
 
 def verify_slots_result(ip: str, port: int, answer: list, rep_ip: str = None, rep_port: int = None) -> bool:
     def is_local_host(ip: str) -> bool:
-        return ip == '127.0.0.1' or ip == 'localhost'
+        return ip in {'127.0.0.1', 'localhost'}
 
     assert answer[0] == 0       # start shard
     assert answer[1] == 16383   # last shard

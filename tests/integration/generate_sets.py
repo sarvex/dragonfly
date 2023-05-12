@@ -9,12 +9,12 @@ import time
 
 
 def fill_set(args, redis: rclient.Redis):
-    for j in range(args.num):
+    for _ in range(args.num):
         token = uuid.uuid1().hex
         # print(token)
         key = f'USER_OTP:{token}'
         arr = []
-        for i in range(30):
+        for _ in range(30):
             otp = ''.join(random.choices(
                 string.ascii_uppercase + string.digits, k=12))
             arr.append(otp)

@@ -34,7 +34,7 @@ class RedisServer:
 
 async def await_synced(master_port, replica_port, dbcount=1):
     rnd_str = "".join(random.choices(string.ascii_letters, k=10))
-    key = "sync_key/" + rnd_str
+    key = f"sync_key/{rnd_str}"
     for db in range(dbcount):
         c_master = aioredis.Redis(port=master_port, db=db)
         await c_master.set(key, "dummy")
@@ -177,7 +177,7 @@ async def test_redis_replication_all(df_local_factory, df_seeder_factory, redis_
 
     # Start replication
     async def run_replication(c_replica):
-        await c_replica.execute_command("REPLICAOF localhost " + str(master.port))
+        await c_replica.execute_command(f"REPLICAOF localhost {str(master.port)}")
         await wait_available_async(c_replica)
 
     await asyncio.gather(*(asyncio.create_task(run_replication(c))
@@ -233,7 +233,7 @@ async def test_disconnect_master(df_local_factory, df_seeder_factory, redis_serv
 
     # Start replication
     async def run_replication(c_replica):
-        await c_replica.execute_command("REPLICAOF localhost " + str(master.port))
+        await c_replica.execute_command(f"REPLICAOF localhost {str(master.port)}")
         await wait_available_async(c_replica)
 
     await asyncio.gather(*(asyncio.create_task(run_replication(c))

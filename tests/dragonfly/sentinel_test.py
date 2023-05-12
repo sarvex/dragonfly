@@ -19,11 +19,11 @@ def stdout_as_list_of_dicts(cp: subprocess.CompletedProcess, new_dict_key =""):
     res = []
     d = None
     if (new_dict_key == ''):
-        d = dict()
+        d = {}
         res.append(d)
     for i in range(0, len(lines), 2):
         if (lines[i]) == new_dict_key: # assumes output never has '' as a key
-            d = dict()
+            d = {}
             res.append(d)
         d[lines[i]] = lines[i + 1]
     return res
@@ -74,8 +74,9 @@ class Sentinel:
 
     def run_cmd(self, args, sentinel_cmd=True, capture_output=False, assert_ok=True) -> subprocess.CompletedProcess:
         run_args = ["redis-cli", "-p", f"{self.port}"]
-        if sentinel_cmd: run_args = run_args + ["sentinel"]
-        run_args = run_args + args
+        if sentinel_cmd:
+            run_args += ["sentinel"]
+        run_args += args
         cp = subprocess.run(run_args, capture_output=capture_output, text=True)
         if assert_ok:
             assert cp.returncode == 0, f"Command failed: {run_args}"
@@ -130,9 +131,9 @@ async def test_failover(df_local_factory, sentinel, port_picker):
 
     master_client = aioredis.Redis(port=master.port)
     replica_client = aioredis.Redis(port=replica.port)
-    logging.info("master: " + str(master.port) + " replica: " + str(replica.port))
+    logging.info(f"master: {str(master.port)} replica: {str(replica.port)}")
 
-    await replica_client.execute_command("REPLICAOF localhost " + str(master.port))
+    await replica_client.execute_command(f"REPLICAOF localhost {str(master.port)}")
 
     assert sentinel.live_master_port() == master.port
 
@@ -163,7 +164,7 @@ async def test_failover(df_local_factory, sentinel, port_picker):
         )
     except AssertionError:
         syncid, r_offset = await master_client.execute_command("DEBUG REPLICA OFFSET")
-        replicaoffset_cmd = "DFLY REPLICAOFFSET " + syncid.decode()
+        replicaoffset_cmd = f"DFLY REPLICAOFFSET {syncid.decode()}"
         m_offset = await replica_client.execute_command(replicaoffset_cmd)
         logging.info(f"{syncid.decode()} {r_offset} {m_offset}")
         logging.info("replica client role:")
@@ -191,7 +192,7 @@ async def test_master_failure(df_local_factory, sentinel, port_picker):
 
     replica_client = aioredis.Redis(port=replica.port)
 
-    await replica_client.execute_command("REPLICAOF localhost " + str(master.port))
+    await replica_client.execute_command(f"REPLICAOF localhost {str(master.port)}")
 
     assert sentinel.live_master_port() == master.port
 

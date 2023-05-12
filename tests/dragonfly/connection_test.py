@@ -21,7 +21,7 @@ async def run_monitor_eval(monitor, expected):
                             print(f"command {response['command']} != {cmd}")
                             return False
                         else:
-                            count = count + 1
+                            count += 1
             except Exception as e:
                 print(f"failed to monitor: {e}")
                 return False
@@ -78,7 +78,7 @@ async def test_monitor_command(async_pool):
         for i in range(max):
             yield f"key{i}", f"value={i}"
 
-    messages = {a: b for a, b in generate(5)}
+    messages = dict(generate(5))
     assert await run_monitor(messages, async_pool)
 
 
@@ -97,13 +97,11 @@ async def process_cmd(monitor, key, value):
             async with async_timeout.timeout(1):
                 response = await monitor.next_command()
                 if "select" not in response["command"].lower():
-                    success = verify_response(response, key, value)
-                    if not success:
-                        print(
-                            f"failed to verify message {response} for {key}/{value}")
-                        return False, f"failed on the verification of the message {response} at {key}: {value}"
-                    else:
+                    if success := verify_response(response, key, value):
                         return True, None
+                    print(
+                        f"failed to verify message {response} for {key}/{value}")
+                    return False, f"failed on the verification of the message {response} at {key}: {value}"
         except asyncio.TimeoutError:
             pass
 
@@ -157,7 +155,7 @@ async def test_pipeline_support(async_client):
         for i in range(max):
             yield f"key{i}", f"value={i}"
 
-    messages = {a: b for a, b in generate(5)}
+    messages = dict(generate(5))
     assert await run_pipeline_mode(async_client, messages)
 
 
@@ -168,7 +166,7 @@ async def reader(channel: aioredis.client.PubSub, messages, max: int):
             async with async_timeout.timeout(1):
                 message = await channel.get_message(ignore_subscribe_messages=True)
                 if message is not None:
-                    message_count = message_count - 1
+                    message_count -= 1
                     if message["data"] not in messages:
                         return False, f"got unexpected message from pubsub - {message['data']}"
                 await asyncio.sleep(0.01)
@@ -206,7 +204,7 @@ async def test_pubsub_command(async_client):
         for i in range(max):
             yield f"message number {i}"
 
-    messages = [a for a in generate(5)]
+    messages = list(generate(5))
     assert await run_pubsub(async_client, messages, "channel-1")
 
 
@@ -234,7 +232,7 @@ async def run_pubsub(async_client, messages, channel_name):
 
 
 async def run_multi_pubsub(async_client, messages, channel_name):
-    subs = [async_client.pubsub() for i in range(5)]
+    subs = [async_client.pubsub() for _ in range(5)]
     for s in subs:
         await s.subscribe(channel_name)
 
@@ -256,10 +254,14 @@ async def run_multi_pubsub(async_client, messages, channel_name):
     for s in subs:
         await s.close()
     if success:
-        for status, message in results:
-            if not status:
-                return False,  f"failed to process {message}"
-        return True, "success"
+        return next(
+            (
+                (False, f"failed to process {message}")
+                for status, message in results
+                if not status
+            ),
+            (True, "success"),
+        )
     else:
         return False, "failed to publish"
 
@@ -277,7 +279,8 @@ async def test_multi_pubsub(async_client):
     def generate(max):
         for i in range(max):
             yield f"this is message number {i} from the publisher on the channel"
-    messages = [a for a in generate(500)]
+
+    messages = list(generate(500))
     state, message = await run_multi_pubsub(async_client, messages, "my-channel")
 
     assert state, message

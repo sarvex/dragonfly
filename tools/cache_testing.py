@@ -41,8 +41,7 @@ def rand_zipf_generator(alpha: float, upper: int, batch: int):
         # bisect them with distMap
         v = np.searchsorted(distMap, u)
 
-        samples = [t-1 for t in v]
-        yield samples
+        yield [t-1 for t in v]
 
 
 def update_stats(hits, misses, value_index, total_count):

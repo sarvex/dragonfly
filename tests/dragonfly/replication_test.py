@@ -61,7 +61,7 @@ async def test_replication_all(df_local_factory, df_seeder_factory, t_master, t_
 
     # Start replication
     async def run_replication(c_replica):
-        await c_replica.execute_command("REPLICAOF localhost " + str(master.port))
+        await c_replica.execute_command(f"REPLICAOF localhost {str(master.port)}")
 
     await asyncio.gather(*(asyncio.create_task(run_replication(c))
                            for c in c_replicas))
@@ -85,7 +85,7 @@ async def test_replication_all(df_local_factory, df_seeder_factory, t_master, t_
 
 async def check_replica_finished_exec(c_replica, c_master):
     syncid, r_offset = await c_replica.execute_command("DEBUG REPLICA OFFSET")
-    command = "DFLY REPLICAOFFSET " + syncid.decode()
+    command = f"DFLY REPLICAOFFSET {syncid.decode()}"
     m_offset = await c_master.execute_command(command)
 
     print("  offset", syncid.decode(),  r_offset, m_offset)
@@ -96,7 +96,7 @@ async def check_all_replicas_finished(c_replicas, c_master):
     print("Waiting for replicas to finish")
 
     waiting_for = list(c_replicas)
-    while len(waiting_for) > 0:
+    while waiting_for:
         await asyncio.sleep(1.0)
 
         tasks = (asyncio.create_task(check_replica_finished_exec(c, c_master))
@@ -185,7 +185,7 @@ async def test_disconnect_replica(df_local_factory: DflyInstanceFactory, df_seed
     # Run full sync
     async def full_sync(replica, c_replica, crash_type):
         c_replica = aioredis.Redis(port=replica.port)
-        await c_replica.execute_command("REPLICAOF localhost " + str(master.port))
+        await c_replica.execute_command(f"REPLICAOF localhost {str(master.port)}")
         if crash_type == 0:
             await asyncio.sleep(random.random()/100+0.01)
             await c_replica.connection_pool.disconnect()
@@ -309,8 +309,15 @@ async def test_disconnect_master(df_local_factory, df_seeder_factory, t_master, 
     await start_master()
 
     # Crash master during full sync, but with all passing initial connection phase
-    await asyncio.gather(*(c_replica.execute_command("REPLICAOF localhost " + str(master.port))
-                           for c_replica in c_replicas), crash_master_fs())
+    await asyncio.gather(
+        *(
+            c_replica.execute_command(
+                f"REPLICAOF localhost {str(master.port)}"
+            )
+            for c_replica in c_replicas
+        ),
+        crash_master_fs(),
+    )
 
     await asyncio.sleep(1 + len(replicas) * 0.5)
 
@@ -573,16 +580,16 @@ async def test_rewrites(df_local_factory):
         await check("SPOP k-set 2", r"DEL k-set")
 
         # Check SET + {EX/PX/EXAT} + {XX/NX/GET} arguments turns into SET PXAT
-        await check(f"SET k v EX 100 NX GET", r"SET k v PXAT (.*?)")
+        await check("SET k v EX 100 NX GET", r"SET k v PXAT (.*?)")
         await check_expire("k")
-        await check(f"SET k v PX 50000", r"SET k v PXAT (.*?)")
+        await check("SET k v PX 50000", r"SET k v PXAT (.*?)")
         await check_expire("k")
         # Exact expiry is skewed
-        await check(f"SET k v XX EXAT {CLOSE_TIMESTAMP}", rf"SET k v PXAT (.*?)")
+        await check(f"SET k v XX EXAT {CLOSE_TIMESTAMP}", "SET k v PXAT (.*?)")
         await check_expire("k")
 
         # Check SET + KEEPTTL doesn't loose KEEPTTL
-        await check(f"SET k v KEEPTTL", r"SET k v KEEPTTL")
+        await check("SET k v KEEPTTL", r"SET k v KEEPTTL")
 
         # Check SETEX/PSETEX turn into SET PXAT
         await check("SETEX k 100 v", r"SET k v PXAT (.*?)")

@@ -26,11 +26,11 @@ async def post_to_redis(sem, db_name, index):
         try:
             redis_client = aioredis.Redis(connection_pool=connection_pool)
             async with redis_client.pipeline(transaction=True) as pipe:
-                for i in range(1, 15):                    
+                for _ in range(1, 15):
                     pipe.hsetnx(name=f"key_{key_index}", key="name", value="bla")
                     key_index += 1
                 #log.info(f"after first half {key_index}")
-                for i in range(1, 15):
+                for _ in range(1, 15):
                     pipe.hsetnx(name=f"bla_{key_index}", key="name2", value="bla")
                     key_index += 1
                 assert len(pipe.command_stack) > 0
@@ -44,10 +44,8 @@ async def post_to_redis(sem, db_name, index):
  
 
 async def do_concurrent(db_name):
-    tasks = []
     sem = asyncio.Semaphore(10)
-    for i in range(1, 3000):
-        tasks.append(post_to_redis(sem, db_name, i))
+    tasks = [post_to_redis(sem, db_name, i) for i in range(1, 3000)]
     res = await asyncio.gather(*tasks)
    
 

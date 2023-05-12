@@ -15,10 +15,10 @@ def chunked(n, iterable):
     """Transform iterable into iterator of chunks of size n"""
     it = iter(iterable)
     while True:
-        chunk = tuple(itertools.islice(it, n))
-        if not chunk:
+        if chunk := tuple(itertools.islice(it, n)):
+            yield chunk
+        else:
             return
-        yield chunk
 
 
 def eprint(*args, **kwargs):
@@ -28,12 +28,12 @@ def eprint(*args, **kwargs):
 
 def gen_test_data(n, start=0, seed=None):
     for i in range(start, n):
-        yield "k-"+str(i), "v-"+str(i) + ("-"+str(seed) if seed else "")
+        yield (f"k-{str(i)}", f"v-{str(i)}" + (f"-{str(seed)}" if seed else ""))
 
 
 def batch_fill_data(client, gen, batch_size=100):
     for group in chunked(batch_size, gen):
-        client.mset({k: v for k, v, in group})
+        client.mset(dict(group))
 
 
 async def wait_available_async(client: aioredis.Redis):
@@ -113,10 +113,7 @@ class CommandGenerator:
         t = self.random_type()
         s = self.set_for_type(t)
 
-        if len(s) == 0:
-            return self.randomize_nonempty_set()
-        else:
-            return s, t
+        return self.randomize_nonempty_set() if len(s) == 0 else (s, t)
 
     def randomize_key(self, t=None, pop=False):
         """Return random key and its type"""
@@ -178,7 +175,7 @@ class CommandGenerator:
         """
         if random.random() < 0.3:
             key, _ = self.randomize_key(pop=True)
-            if key == None:
+            if key is None:
                 return None, 0
             return f"PEXPIRE k{key} {random.randint(0, 50)}", -1
         else:
@@ -186,9 +183,7 @@ class CommandGenerator:
                         for _ in range(random.randint(1, self.max_multikey)))
             keys = [f"k{k}" for k, _ in keys_gen if k is not None]
 
-            if len(keys) == 0:
-                return None, 0
-            return "DEL " + " ".join(keys), -len(keys)
+            return (None, 0) if not keys else ("DEL " + " ".join(keys), -len(keys))
 
     UPDATE_ACTIONS = [
         ('APPEND {k} {val}', ValueType.STRING),
@@ -230,11 +225,7 @@ class CommandGenerator:
         """
         # TODO: Implement COPY in Dragonfly.
         t = self.random_type()
-        if t == ValueType.STRING:
-            count = random.randint(1, self.max_multikey)
-        else:
-            count = 1
-
+        count = random.randint(1, self.max_multikey) if t == ValueType.STRING else 1
         keys = (self.add_key(t) for _ in range(count))
         payload = itertools.chain(
             *((f"k{k}",) + self.generate_val(t) for k in keys))
@@ -392,10 +383,12 @@ class DflySeeder:
             port = self.port
         keys = sorted(list(self.gen.keys_and_types()))
 
-        captures = await asyncio.gather(*(
-            self._capture_db(port=port, target_db=db, keys=keys) for db in range(self.dbcount)
-        ))
-        return captures
+        return await asyncio.gather(
+            *(
+                self._capture_db(port=port, target_db=db, keys=keys)
+                for db in range(self.dbcount)
+            )
+        )
 
     async def compare(self, initial_captures, port=6379):
         """Compare data capture with all dbs of instance and return True if all dbs are correct"""
@@ -434,15 +427,10 @@ class DflySeeder:
                 return False
             if target_ops is not None and submitted >= target_ops:
                 return False
-            if target_deviation is not None and abs(1-deviation) < target_deviation:
-                return False
-            return True
+            return target_deviation is None or abs(1-deviation) >= target_deviation
 
         def stringify_cmd(cmd):
-            if isinstance(cmd, tuple):
-                return " ".join(str(c) for c in cmd)
-            else:
-                return str(cmd)
+            return " ".join(str(c) for c in cmd) if isinstance(cmd, tuple) else str(cmd)
 
         while should_run():
             start_time = time.time()

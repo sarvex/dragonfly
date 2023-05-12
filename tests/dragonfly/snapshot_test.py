@@ -21,7 +21,8 @@ class SnapshotTestBase:
     def get_main_file(self, pattern):
         def is_main(f): return "summary" in f if pattern.endswith(
             "dfs") else True
-        files = glob.glob(str(self.tmp_dir.absolute()) + '/' + pattern)
+
+        files = glob.glob(f'{str(self.tmp_dir.absolute())}/{pattern}')
         possible_mains = list(filter(is_main, files))
         assert len(possible_mains) == 1, possible_mains
         return possible_mains[0]
@@ -67,7 +68,7 @@ class TestRdbSnapshotExactFilename(SnapshotTestBase):
         await async_client.execute_command("SAVE RDB")
         assert await async_client.flushall()
         main_file = super().get_main_file("test-rdbexact.rdb")
-        await async_client.execute_command("DEBUG LOAD " + main_file)
+        await async_client.execute_command(f"DEBUG LOAD {main_file}")
 
         assert await seeder.compare(start_capture)
 
@@ -123,7 +124,7 @@ class TestDflyAutoLoadSnapshot(SnapshotTestBase):
 
         client = aioredis.Redis(port=df_server.port)
         await client.set("TEST", hash(dbfilename))
-        await client.execute_command("SAVE " + save_type)
+        await client.execute_command(f"SAVE {save_type}")
         df_server.stop()
 
         df_server2 = df_local_factory.create(**df_args)

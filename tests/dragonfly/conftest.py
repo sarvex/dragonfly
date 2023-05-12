@@ -108,7 +108,7 @@ def df_server(df_factory: DflyInstanceFactory) -> DflyInstance:
         print(e, file=sys.stderr)
 
     instance.stop()
-    assert clients_left == []
+    assert not clients_left
 
 
 @pytest.fixture(scope="class")

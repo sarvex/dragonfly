@@ -21,7 +21,7 @@ class TwitterCacheTraceParser:
     """
     def parse(self, csv) -> Command:
         operation = csv[5]
-        key = csv[1] + "a"
+        key = f"{csv[1]}a"
         value_size = int(csv[3])
         synthetic_value = "".zfill(value_size)
 
@@ -31,29 +31,19 @@ class TwitterCacheTraceParser:
         cmd = Command()
         cmd.sync_id = client_id
 
-        if operation == "get":
-            cmd.args = ["GET", key]
-        elif operation == 'gets':
-            cmd.args = ["GET", key]
-        elif operation == 'set':
-            cmd.args = ["SET", key, synthetic_value]
-        elif operation == 'add':
-            cmd.args = ["SET", key, synthetic_value]
-        elif operation == 'replace':
-            cmd.args = ["SET", key, synthetic_value]
-        elif operation == 'cas':
-            cmd.args = ["SET", key, synthetic_value]
-        elif operation == 'append':
+        if operation == 'append':
             cmd.args = ["APPEND", key, synthetic_value]
-        elif operation == 'prepend':
-            cmd.args = ["SET", key, synthetic_value]
+        elif operation == 'decr':
+            cmd.args = ["DECR", key]
+
         elif operation == 'delete':
             cmd.args = ["DEL", key]
         elif operation == 'incr':
             cmd.args = ["INCR", key]
-        elif operation == 'decr':
-            cmd.args = ["DECR", key]
-
+        elif operation in ['set', 'add', 'replace', 'cas', 'prepend']:
+            cmd.args = ["SET", key, synthetic_value]
+        elif operation in ["get", 'gets']:
+            cmd.args = ["GET", key]
         return cmd
 
 class AsyncWorker:
@@ -99,7 +89,7 @@ class AsyncWorkerPool:
         self.next_worker_index = -1
 
     def allocate(self, sync_id) -> AsyncWorker:
-        if not sync_id in self.sync_id_to_worker:
+        if sync_id not in self.sync_id_to_worker:
             self.next_worker_index = (self.next_worker_index + 1) % self.num_workers
 
             if len(self.workers) <= self.next_worker_index:

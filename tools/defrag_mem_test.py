@@ -42,21 +42,19 @@ class TaskCancel:
         self.run = False
 
 async def run_cmd(connection, cmd, sub_val):
-    val = await connection.execute_command(cmd, sub_val)
-    return val
+    return await connection.execute_command(cmd, sub_val)
 
 async def handle_defrag_stats(connection, prev):
     info = await run_cmd(connection, "info", "stats")
-    if info is not None:
-        if info['defrag_task_invocation_total'] != prev:
-            print("--------------------------------------------------------------")
-            print(f"defrag_task_invocation_total: {info['defrag_task_invocation_total']:,}")
-            print(f"defrag_realloc_total: {info['defrag_realloc_total']:,}")
-            print(f"defrag_attempt_total: {info['defrag_attempt_total']:,}")
-            print("--------------------------------------------------------------")
-            if info["defrag_realloc_total"] > 0:
-                return True, None
-            return False, info['defrag_task_invocation_total']
+    if info is not None and info['defrag_task_invocation_total'] != prev:
+        print("--------------------------------------------------------------")
+        print(f"defrag_task_invocation_total: {info['defrag_task_invocation_total']:,}")
+        print(f"defrag_realloc_total: {info['defrag_realloc_total']:,}")
+        print(f"defrag_attempt_total: {info['defrag_attempt_total']:,}")
+        print("--------------------------------------------------------------")
+        if info["defrag_realloc_total"] > 0:
+            return True, None
+        return False, info['defrag_task_invocation_total']
     return False, None
 
 async def memory_stats(connection):
@@ -78,13 +76,12 @@ async def stats_check(connection, condition):
             if done:
                 print("defrag task successfully found memory locations to reallocate")
                 condition.stop()
-            else:
-                if d is not None:
-                    defrag_task_invocation_total = d
+            elif d is not None:
+                defrag_task_invocation_total = d
             runs += 1
             if runs % 3 == 0:
                 await memory_stats(connection)
-        for i in range(5):
+        for _ in range(5):
             done, d = await handle_defrag_stats(connection, -1)
             if done:
                 print("defrag task successfully found memory locations to reallocate")
@@ -98,13 +95,11 @@ async def stats_check(connection, condition):
 
 
 async def delete_keys(connection, keys):
-    results = await connection.delete(*keys)
-    return results
+    return await connection.delete(*keys)
 
 def generate_keys(pattern: str, count: int, batch_size: int) -> list:
     for i in range(1, count, batch_size):
-        batch = [f"{pattern}{j}" for j in range(i, batch_size + i, 3)]
-        yield batch
+        yield [f"{pattern}{j}" for j in range(i, batch_size + i, 3)]
 
 async def mem_cleanup(connection, pattern, num, cond, keys_count):
     counter=0
@@ -128,12 +123,10 @@ async def run_tasks(pool, key_name, value_size, keys_count):
             await connection.execute_command("DEBUG", "POPULATE", keys_count, key, value_size)
             await asyncio.sleep(2)
         tasks = []
-        count = 0
-        for key in keys:
+        for count, key in enumerate(keys):
             pattern=f"{key}:"
             print(f"deleting keys from {pattern}")
             tasks.append(mem_cleanup(connection=connection, pattern=pattern, num=count, cond=stop_cond, keys_count=int(keys_count)))
-            count += 1
         monitor_task = asyncio.create_task(stats_check(connection, stop_cond))
         total = await asyncio.gather(*tasks, return_exceptions=True)
         print(f"successfully deleted {sum(total)} keys")
@@ -151,8 +144,14 @@ def connect_and_run(key_name, value_size, keys_count, host="localhost", port=637
                                          db=0, decode_responses=True, max_connections=16)
 
     loop = asyncio.new_event_loop()
-    success = loop.run_until_complete(run_tasks(pool=async_pool, key_name=key_name, value_size=value_size, keys_count=keys_count))
-    return success
+    return loop.run_until_complete(
+        run_tasks(
+            pool=async_pool,
+            key_name=key_name,
+            value_size=value_size,
+            keys_count=keys_count,
+        )
+    )
 
 
 if __name__ == "__main__":
